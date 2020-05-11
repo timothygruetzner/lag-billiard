@@ -7,6 +7,7 @@ class Wall:
         self.end = np.array([0, 0])
         self.line_id = 0
         self.vector = np.empty([1, 2])
+        self.last_intersection_coefficient = 0
 
     def calc_vector(self):
         self.vector = np.subtract(self.end, self.start)
