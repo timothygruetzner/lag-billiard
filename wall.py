@@ -1,7 +1,12 @@
+import numpy as np
+
+
 class Wall:
     def __init__(self):
-        self.x_start = 0
-        self.y_start = 0
-        self.x_end = 0
-        self.y_end = 0
+        self.start = np.array([0, 0])
+        self.end = np.array([0, 0])
         self.line_id = 0
+        self.vector = np.empty([1, 2])
+
+    def calc_vector(self):
+        self.vector = np.subtract(self.end, self.start)
