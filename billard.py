@@ -1,9 +1,12 @@
-import time
 from tkinter import *
 
 import numpy as np
-from wall import Wall
+from numpy.linalg import LinAlgError
+
 from ball import Ball
+from wall import Wall
+
+np.seterr('raise')
 
 HEIGHT = 900
 WIDTH = 600
@@ -81,7 +84,11 @@ def calc_next_intersection(direction_v):
 
         absolute = np.array([wall.start[0] - ball.pos[0], wall.start[1] - ball.pos[1]])
 
-        var_t = np.linalg.solve(variables, absolute)[0]
+        try:
+            var_t = np.linalg.solve(variables, absolute)[0]
+        except LinAlgError:
+            var_t = 0
+
         wall.last_intersection_coefficient = var_t
 
     # sort by "t" variable, ascending
@@ -93,35 +100,34 @@ def calc_next_intersection(direction_v):
     i = 0
     while True:
         nearest_wall = walls[i]
+
+        # the coefficient is 0 if we encountered a linalg error before. ignore this wall
+        if nearest_wall.last_intersection_coefficient == 0:
+            i += 1
+            continue
+
         intersection = np.array([ball.pos[0] + nearest_wall.last_intersection_coefficient * direction_v[0],
                                  ball.pos[1] + nearest_wall.last_intersection_coefficient * direction_v[1]])
         i += 1
-        if nearest_wall.last_intersection_coefficient > 0 and nearest_wall.intersect_is_in_bounds(intersection):
+        if nearest_wall.last_intersection_coefficient > 0 and nearest_wall.intersect_is_in_bounds(
+                intersection) or i == len(walls):
             break
 
     # mirror the ball position on the wall he is going to hit
     mirror_point = mirror_current_ball_pos(nearest_wall)
 
-    # perform animation
-    move_ball_to_new_point(intersection[0], intersection[1])
-    print("finished")
+    # perform animation and start next loop
+    move_ball_to_new_point(intersection, mirror_point)
 
 
-    # calculate the reflection direction
-    reflection_direction = np.subtract(intersection, mirror_point)
-
-    # recursive call to calculate the next intersection in the calculated reflection direction
-    #calc_next_intersection(reflection_direction)
-
-
-def move_ball_to_new_point(x_coord, y_coord):
-    global move_completed
-    move_completed = False
+def move_ball_to_new_point(intersection_point, mirror_point):
     current = ball.pos
-    target = np.array([x_coord, y_coord])
 
-    direction_v = np.subtract(target, current)
+    direction_v = np.subtract(intersection_point, current)
     magnitude = np.linalg.norm(direction_v)
+    if magnitude == 0:
+        magnitude = 1
+
     # normalize result vector to magnitude of 1
     normalized_direction = []
     for comp in direction_v:
@@ -131,17 +137,21 @@ def move_ball_to_new_point(x_coord, y_coord):
     ball.move(normalized_direction[0], normalized_direction[1])
 
     # if we are closer than 1 pixel, just move to the target (on the X or Y axis)
-    if abs(ball.pos[0] - target[0]) < 1:
-        ball.moveTo((target[0], ball.pos[1]))  # move to X-target
-    if abs(ball.pos[1] - target[1]) < 1:
-        ball.moveTo((ball.pos[0], target[1]))  # move to Y-target
+    if abs(ball.pos[0] - intersection_point[0]) < 1:
+        ball.moveTo((intersection_point[0], ball.pos[1]))  # move to X-target
+    if abs(ball.pos[1] - intersection_point[1]) < 1:
+        ball.moveTo((ball.pos[0], intersection_point[1]))  # move to Y-target
 
-    # if the final destination has been reached, set the global variable to false
-    if (ball.pos[0], ball.pos[1]) != (target[0], target[1]):
-        c.after(4, move_ball_to_new_point, target[0], target[1])
+    # only continue if we have reached the exact position
+    if (ball.pos[0], ball.pos[1]) != (intersection_point[0], intersection_point[1]):
+        c.after(4, move_ball_to_new_point, intersection_point, mirror_point)
     else:
-        print("finished!")
-        move_completed = True
+        print("we continue")
+        # calculate the reflection direction
+        reflection_direction = np.subtract(intersection_point, mirror_point)
+
+        # recursive call to calculate the next intersection in the calculated reflection direction
+        calc_next_intersection(reflection_direction)
 
 
 def mirror_current_ball_pos(nearest_wall):
