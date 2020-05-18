@@ -76,6 +76,9 @@ def leftPressed(event):
 
 
 def calc_next_intersection(direction_v):
+    if direction_v[0] == 0 and direction_v[1] == 0:
+        direction_v = np.array([1, 1])
+
     for wall in walls:
         # calculate intersection point
         x_coord = np.array([direction_v[0], -1 * wall.vector[0]])
@@ -87,6 +90,7 @@ def calc_next_intersection(direction_v):
         try:
             var_t = np.linalg.solve(variables, absolute)[0]
         except LinAlgError:
+            print("Linalg error while calculating next intersection with wall. Results might be in-accurate.")
             var_t = 0
 
         wall.last_intersection_coefficient = var_t
@@ -95,23 +99,36 @@ def calc_next_intersection(direction_v):
     walls.sort(key=lambda w: w.last_intersection_coefficient, reverse=False)
 
     # loop over the walls until:
-    # a) the nearest wall has a positive intersection coefficient
+    # a) the nearest wall has a positive intersection coefficient (is not behind ball)
     # b) where the intersection point of the nearest wall lies between start and end point!
     i = 0
     while True:
+        if i == len(walls):
+            break
+
         nearest_wall = walls[i]
 
         # the coefficient is 0 if we encountered a linalg error before. ignore this wall
         if nearest_wall.last_intersection_coefficient == 0:
+            # print(str(i) + ": could not be solved")
             i += 1
             continue
 
         intersection = np.array([ball.pos[0] + nearest_wall.last_intersection_coefficient * direction_v[0],
                                  ball.pos[1] + nearest_wall.last_intersection_coefficient * direction_v[1]])
-        i += 1
-        if nearest_wall.last_intersection_coefficient > 0 and nearest_wall.intersect_is_in_bounds(
-                intersection) or i == len(walls):
-            break
+
+        if not nearest_wall.intersect_is_in_bounds(intersection):
+            # print(str(i) + " does not actually intersect with trajectory")
+            i += 1
+            continue
+
+        if not nearest_wall.last_intersection_coefficient > 0:
+            # print(str(i) + " is behind the ball")
+            i += 1
+            continue
+
+        # print(str(i) + " is is the one!")
+        break
 
     # mirror the ball position on the wall he is going to hit
     mirror_point = mirror_current_ball_pos(nearest_wall)
@@ -146,7 +163,6 @@ def move_ball_to_new_point(intersection_point, mirror_point):
     if (ball.pos[0], ball.pos[1]) != (intersection_point[0], intersection_point[1]):
         c.after(4, move_ball_to_new_point, intersection_point, mirror_point)
     else:
-        print("we continue")
         # calculate the reflection direction
         reflection_direction = np.subtract(intersection_point, mirror_point)
 
